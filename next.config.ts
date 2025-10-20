@@ -1,24 +1,46 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Enable standalone output for Docker
+  output: 'standalone',
+  
+  // TypeScript configuration
   typescript: {
     ignoreBuildErrors: true,
   },
-  // 禁用 Next.js 热重载，由 nodemon 处理重编译
+  
+  // React configuration
   reactStrictMode: false,
+  
+  // ESLint configuration
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  
+  // Environment variables
+  env: {
+    CUSTOM_KEY: process.env.CUSTOM_KEY,
+  },
+  
+  // Webpack configuration
   webpack: (config, { dev }) => {
     if (dev) {
-      // 禁用 webpack 的热模块替换
       config.watchOptions = {
-        ignored: ['**/*'], // 忽略所有文件变化
+        ignored: ['**/*'],
       };
     }
     return config;
   },
-  eslint: {
-    // 构建时忽略ESLint错误
-    ignoreDuringBuilds: true,
+  
+  // Image optimization
+  images: {
+    domains: ['localhost', 'picsum.photos'],
+    unoptimized: true,
+  },
+  
+  // Experimental features
+  experimental: {
+    serverComponentsExternalPackages: ['@prisma/client'],
   },
 };
 
