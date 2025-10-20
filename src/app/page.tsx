@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -366,6 +367,17 @@ export default function HRMDashboard() {
             </Card>
           )}
         </main>
+=======
+export default function Home() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen gap-8 p-4">
+      <div className="relative w-24 h-24 md:w-32 md:h-32">
+        <img
+          src="/logo.svg"
+          alt="Z.ai Logo"
+          className="w-full h-full object-contain"
+        />
+>>>>>>> 978d9d138756189dac8b73219b8bb59e163e1c02
       </div>
     </div>
   )
