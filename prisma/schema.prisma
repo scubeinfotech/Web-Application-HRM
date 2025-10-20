@@ -1,0 +1,441 @@
+// Singapore HRM System - Complete Database Schema
+// Production-ready Human Resource Management for Singapore Standards
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Company Management (Sister Concerns)
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  uen         String?  // Unique Entity Number for Singapore
+  address     String?
+  phone       String?
+  email       String?
+  logo        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  employees   Employee[]
+  salarySlips SalarySlip[]
+  users       User[]
+
+  @@map("companies")
+}
+
+// IAM Module - Users and Roles
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  avatar    String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  company       Company?  @relation(fields: [companyId], references: [id])
+  companyId     String?
+  employee      Employee?
+  employeeId    String?   @unique
+  roles         UserRole[]
+  sessions      UserSession[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions Json     // Array of permission strings
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  refreshToken String?  @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+// Employee Management with Singapore Standards
+model Employee {
+  id              String   @id @default(cuid())
+  employeeCode    String   @unique
+  nric            String   @unique // Singapore NRIC
+  workPassType    WorkPassType
+  workPassNumber  String?  @unique
+  photo           String?
+  firstName       String
+  lastName        String
+  email           String   @unique
+  phone           String?
+  address         String?
+  dateOfBirth     DateTime
+  gender          Gender
+  nationality     String
+  maritalStatus   MaritalStatus?
+  joinDate        DateTime
+  endDate         DateTime?
+  basicSalary     Decimal  @db.Decimal(10, 2)
+  hourlyRate      Decimal  @db.Decimal(10, 2) // Calculated: basic * 12 / 2288
+  bankName        String?
+  bankAccount     String?
+  cpfNumber       String?  // Central Provident Fund
+  sdlLevy         Decimal  @default(0) @db.Decimal(10, 2) // Skills Development Levy
+  fwlLevy         Decimal  @default(0) @db.Decimal(10, 2) // Foreign Worker Levy
+  
+  // Employment Status
+  employmentType  EmploymentType
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  department      String?
+  position        String?
+  reportingTo     String?
+  
+  // System Fields
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  company         Company? @relation(fields: [companyId], references: [id])
+  companyId       String?
+  user            User?    @relation(fields: [userId], references: [id])
+  userId          String?  @unique
+  
+  // Related Data
+  allowances      Allowance[]
+  deductions      Deduction[]
+  timesheets      Timesheet[]
+  leaveRequests   LeaveRequest[]
+  salarySlips     SalarySlip[]
+  projectAssignments ProjectAssignment[]
+
+  @@map("employees")
+}
+
+// Salary Components
+model Allowance {
+  id          String   @id @default(cuid())
+  employeeId  String
+  type        String   // e.g., "Transport", "Meal", "Housing"
+  amount      Decimal  @db.Decimal(10, 2)
+  isRecurring Boolean  @default(true)
+  effectiveDate DateTime
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("allowances")
+}
+
+model Deduction {
+  id          String   @id @default(cuid())
+  employeeId  String
+  type        String   // e.g., "CPF", "Loan", "Absence"
+  amount      Decimal  @db.Decimal(10, 2)
+  isRecurring Boolean  @default(true)
+  effectiveDate DateTime
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("deductions")
+}
+
+// Timesheet Management
+model Timesheet {
+  id          String   @id @default(cuid())
+  employeeId  String
+  date        DateTime
+  clockIn     DateTime
+  clockOut    DateTime?
+  breakMinutes Int     @default(0)
+  normalHours Decimal  @db.Decimal(5, 2)
+  ot1_5Hours  Decimal  @db.Decimal(5, 2) @default(0) // 1.5x rate (after 5pm - 11:59pm)
+  ot2Hours    Decimal  @db.Decimal(5, 2) @default(0) // 2x rate (12am - 8am)
+  totalHours  Decimal  @db.Decimal(5, 2)
+  status      TimesheetStatus @default(PENDING)
+  approvedBy  String?
+  approvedAt  DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  project   ProjectAssignment? @relation(fields: [projectAssignmentId], references: [id])
+  projectAssignmentId String?
+
+  @@unique([employeeId, date])
+  @@map("timesheets")
+}
+
+// Client Management
+model Client {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  address     String?
+  phone       String?
+  email       String?
+  contactPerson String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  projects Project[]
+
+  @@map("clients")
+}
+
+// Project Management
+model Project {
+  id            String   @id @default(cuid())
+  clientId      String
+  name          String
+  description   String?
+  startDate     DateTime
+  endDate       DateTime
+  estimatedCost Decimal  @db.Decimal(12, 2)
+  actualCost    Decimal  @db.Decimal(12, 2) @default(0)
+  status        ProjectStatus @default(PLANNING)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  client       Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  assignments  ProjectAssignment[]
+
+  @@map("projects")
+}
+
+model ProjectAssignment {
+  id         String   @id @default(cuid())
+  projectId  String
+  employeeId String
+  role       String?
+  startDate  DateTime
+  endDate    DateTime?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  timesheets Timesheet[]
+
+  @@unique([projectId, employeeId])
+  @@map("project_assignments")
+}
+
+// Leave Management
+model LeaveType {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  daysAllowed Int      // Number of days allowed per year
+  isPaid      Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  leaveRequests LeaveRequest[]
+
+  @@map("leave_types")
+}
+
+model LeaveRequest {
+  id          String   @id @default(cuid())
+  employeeId  String
+  leaveTypeId String
+  startDate   DateTime
+  endDate     DateTime
+  daysCount   Decimal  @db.Decimal(3, 1)
+  reason      String?
+  status      LeaveStatus @default(PENDING)
+  approvedBy  String?
+  approvedAt  DateTime?
+  rejectionReason String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@map("leave_requests")
+}
+
+// Salary Management
+model SalarySlip {
+  id            String   @id @default(cuid())
+  employeeId    String
+  companyId     String
+  month         Int      // 1-12
+  year          Int
+  basicSalary   Decimal  @db.Decimal(10, 2)
+  totalAllowances Decimal @db.Decimal(10, 2) @default(0)
+  totalDeductions Decimal @db.Decimal(10, 2) @default(0)
+  overtimePay   Decimal  @db.Decimal(10, 2) @default(0)
+  netSalary     Decimal  @db.Decimal(10, 2)
+  cpfEmployee   Decimal  @db.Decimal(10, 2) @default(0)
+  cpfEmployer   Decimal  @db.Decimal(10, 2) @default(0)
+  status        SalaryStatus @default(DRAFT)
+  generatedBy   String
+  approvedBy    String?
+  approvedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company  Company @relation(fields: [companyId], references: [id])
+
+  @@unique([employeeId, month, year])
+  @@map("salary_slips")
+}
+
+// Audit Trail
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // CREATE, UPDATE, DELETE, LOGIN, etc.
+  module    String   // EMPLOYEE, TIMESHEET, SALARY, etc.
+  recordId  String?
+  oldValues Json?
+  newValues Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// Enums for Singapore HR Standards
+enum WorkPassType {
+  SINGAPOREAN
+  PR          // Permanent Resident
+  SPASS       // S Pass
+  EPASS       // Employment Pass
+  WPASS       // Work Permit
+  DPASS       // Dependant Pass
+  LTVP        // Long Term Visit Pass
+  STUDENT_PASS
+  OTHER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  FREELANCE
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  TERMINATED
+  RESIGNED
+  ON_LEAVE
+}
+
+enum TimesheetStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DRAFT
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum SalaryStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+  CANCELLED
+}
