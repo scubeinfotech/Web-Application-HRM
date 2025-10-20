@@ -1,52 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { verifyAuth, hasPermission } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 
-// GET /api/employees - List all employees
 export async function GET(request: NextRequest) {
   try {
-    const user = await verifyAuth(request)
-    if (!user || !hasPermission(user, 'employees.read')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
     const search = searchParams.get('search') || ''
     const companyId = searchParams.get('companyId')
 
-    const where: any = {
-      ...(user.companyId && { companyId: user.companyId }),
+    const skip = (page - 1) * limit
+
+    const where = {
       ...(companyId && { companyId }),
       ...(search && {
         OR: [
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
-          { employeeCode: { contains: search, mode: 'insensitive' } }
-        ]
-      })
+          { firstName: { contains: search, mode: 'insensitive' as const } },
+          { lastName: { contains: search, mode: 'insensitive' as const } },
+          { email: { contains: search, mode: 'insensitive' as const } },
+          { employeeCode: { contains: search, mode: 'insensitive' as const } },
+        ],
+      }),
     }
 
     const [employees, total] = await Promise.all([
       db.employee.findMany({
         where,
+        skip,
+        take: limit,
         include: {
           company: {
-            select: { id: true, name: true }
+            select: { name: true }
           },
-          allowances: {
-            where: { isRecurring: true }
-          },
-          deductions: {
-            where: { isRecurring: true }
+          user: {
+            select: { email: true, isActive: true }
           }
         },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit
+        orderBy: { createdAt: 'desc' }
       }),
       db.employee.count({ where })
     ])
@@ -57,78 +48,113 @@ export async function GET(request: NextRequest) {
         page,
         limit,
         total,
-        pages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / limit)
       }
     })
-
   } catch (error) {
-    console.error('Employees fetch error:', error)
+    console.error('Error fetching employees:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to fetch employees' },
       { status: 500 }
     )
   }
 }
 
-// POST /api/employees - Create new employee
 export async function POST(request: NextRequest) {
   try {
-    const user = await verifyAuth(request)
-    if (!user || !hasPermission(user, 'employees.create')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const body = await request.json()
+    
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      nric,
+      workPassType,
+      workPassNumber,
+      dateOfBirth,
+      gender,
+      nationality,
+      maritalStatus,
+      joinDate,
+      basicSalary,
+      bankName,
+      bankAccount,
+      employmentType,
+      department,
+      position,
+      companyId
+    } = body
+
+    // Validate required fields
+    if (!firstName || !lastName || !email || !nric || !dateOfBirth || !gender || !nationality || !joinDate || !basicSalary) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
     }
 
-    const data = await request.json()
+    // Check if employee already exists
+    const existingEmployee = await db.employee.findFirst({
+      where: {
+        OR: [
+          { email },
+          { nric }
+        ]
+      }
+    })
 
-    // Calculate hourly rate (basic * 12 / 2288)
-    const hourlyRate = Number(data.basicSalary) * 12 / 2288
-
-    // Generate employee code if not provided
-    if (!data.employeeCode) {
-      const count = await db.employee.count({
-        where: { companyId: user.companyId }
-      })
-      data.employeeCode = `EMP${String(count + 1).padStart(4, '0')}`
+    if (existingEmployee) {
+      return NextResponse.json(
+        { error: 'Employee with this email or NRIC already exists' },
+        { status: 400 }
+      )
     }
 
+    // Generate employee code
+    const employeeCount = await db.employee.count()
+    const employeeCode = `EMP${String(employeeCount + 1).padStart(4, '0')}`
+
+    // Calculate hourly rate (Basic Salary × 12 / 2288)
+    const hourlyRate = (Number(basicSalary) * 12) / 2288
+
+    // Create employee
     const employee = await db.employee.create({
       data: {
-        ...data,
-        hourlyRate,
-        companyId: user.companyId || data.companyId
+        employeeCode,
+        firstName,
+        lastName,
+        email,
+        phone,
+        nric,
+        workPassType,
+        workPassNumber,
+        dateOfBirth: new Date(dateOfBirth),
+        gender,
+        nationality,
+        maritalStatus,
+        joinDate: new Date(joinDate),
+        basicSalary: Number(basicSalary),
+        hourlyRate: Number(hourlyRate.toFixed(2)),
+        bankName,
+        bankAccount,
+        employmentType,
+        department,
+        position,
+        companyId: companyId || null
       },
       include: {
         company: {
-          select: { id: true, name: true }
+          select: { name: true }
         }
       }
     })
 
-    // Create user account if email is provided
-    if (data.createUserAccount && data.email) {
-      const defaultPassword = 'Temp@123456'
-      const hashedPassword = await bcrypt.hash(defaultPassword, 10)
-
-      await db.user.create({
-        data: {
-          email: data.email,
-          password: hashedPassword,
-          name: `${data.firstName} ${data.lastName}`,
-          companyId: user.companyId || data.companyId,
-          employeeId: employee.id
-        }
-      })
-    }
-
-    return NextResponse.json({
-      message: 'Employee created successfully',
-      employee
-    })
-
+    return NextResponse.json(employee, { status: 201 })
   } catch (error) {
-    console.error('Employee creation error:', error)
+    console.error('Error creating employee:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to create employee' },
       { status: 500 }
     )
   }

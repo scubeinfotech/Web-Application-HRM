@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   Users, 
   Clock, 
@@ -25,6 +24,7 @@ import {
   LogOut,
   ChevronRight
 } from 'lucide-react'
+import { EmployeeList } from '@/components/employees/EmployeeList'
 
 export default function HRMDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -220,7 +220,11 @@ export default function HRMDashboard() {
                     <CardDescription>Common tasks you can perform</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <Button className="w-full justify-start" variant="outline">
+                    <Button 
+                      className="w-full justify-start" 
+                      variant="outline"
+                      onClick={() => setActiveTab('employees')}
+                    >
                       <UserPlus className="w-4 h-4 mr-2" />
                       Add New Employee
                     </Button>
@@ -338,8 +342,11 @@ export default function HRMDashboard() {
             </div>
           )}
 
+          {/* Employee Management Tab */}
+          {activeTab === 'employees' && <EmployeeList />}
+
           {/* Placeholder for other tabs */}
-          {activeTab !== 'overview' && (
+          {activeTab !== 'overview' && activeTab !== 'employees' && (
             <Card>
               <CardHeader>
                 <CardTitle>{menuItems.find(item => item.id === activeTab)?.label}</CardTitle>
