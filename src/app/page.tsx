@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -352,12 +351,12 @@ export default function HRMDashboard() {
                 <div className="text-center py-12">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     {(() => {
-                      const Icon = menuItems.find(item => item.id === activeTab)?.icon || Settings
+                      const Icon = menuItems.find(item => item.id === activeTab)?.icon || Home
                       return <Icon className="w-8 h-8 text-gray-400" />
                     })()}
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Coming Soon
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    {menuItems.find(item => item.id === activeTab)?.label}
                   </h3>
                   <p className="text-gray-500">
                     This module is currently being developed with all the features you requested.
@@ -367,17 +366,6 @@ export default function HRMDashboard() {
             </Card>
           )}
         </main>
-=======
-export default function Home() {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-8 p-4">
-      <div className="relative w-24 h-24 md:w-32 md:h-32">
-        <img
-          src="/logo.svg"
-          alt="Z.ai Logo"
-          className="w-full h-full object-contain"
-        />
->>>>>>> 978d9d138756189dac8b73219b8bb59e163e1c02
       </div>
     </div>
   )
